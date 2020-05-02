@@ -56,7 +56,7 @@ uint8_t dataPacket[10];
 
 void setup()
 {
-  Serial.begin(115200); // initialize serial communication at 115200 bits per second:
+  Serial.begin(9600); // initialize serial communication at 115200 bits per second:
 
   pinMode(pulseLED, OUTPUT);
   pinMode(readLED, OUTPUT);
@@ -111,8 +111,6 @@ void loop()
     {
       while (particleSensor.available() == false) //do we have new data?
         particleSensor.check(); //Check the sensor for new data
-
-      digitalWrite(readLED, !digitalRead(readLED)); //Blink onboard LED with every data read
 
       redBuffer[i] = particleSensor.getRed();
       irBuffer[i] = particleSensor.getIR();

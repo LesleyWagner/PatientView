@@ -144,7 +144,7 @@ final int wifiPacketLength = 10;
 
 /************** Serial Variables (Lesley) **********************/
 final String arduinoPortName = "/dev/ttyUSB0";
-final int baudrate = 115200;
+int baudrate = 38400;
 Serial arduinoPort;
 final int serialDataLength = 8;
 final int serialPacketLength = 10;
@@ -220,25 +220,27 @@ public void setup() {
   }
   plotRed.setPoints(pointsRed);
   plotIR.setPoints(pointsIR);
-  startPlot = true;
-  
+    
   // start serial connection
-  arduinoPort = new Serial(this, arduinoPortName, baudrate);
-  println("something");
+  arduinoPort = new Serial(this, arduinoPortName);
   int nextByte = 0xFF;
-  //while (nextByte != delimiter) {
-  //  // nextByte = arduinoPort.read();
-  //  // println(nextByte);
-  //  if (arduinoPort.available() > 0) {
-  //    println("success");
-  //  }
+  while (nextByte != delimiter) {
+    while (arduinoPort.available() == 0) {};
+    nextByte = arduinoPort.read();
+    //println(nextByte);
+    //if (arduinoPort.available() > 0) {
+    //  println("success");
+    //}
+  }
+  
+  //delay(1000);
+  
+  //for (int i = 0; i < 1000; i++) {
+  //  while (arduinoPort.available() == 0) {};
+  //  println(arduinoPort.read());
   //}
   
-  delay(1000);
-  
-  for (int i = 0; i < 100; i++) {
-    println(arduinoPort.read());
-  }
+  startPlot = true;
 }
 
 /**
@@ -260,21 +262,6 @@ public void makeGUI() {
       }
      } 
      );
-  
-   cp5.addButton("Record")
-     .setValue(0)
-     .setPosition(width-225,10)
-     .setSize(100,40)
-     .setFont(createFont("Arial",15))
-     .addCallback(new CallbackListener() {
-      public void controlEvent(CallbackEvent event) {
-        if (event.getAction() == ControlP5.ACTION_RELEASE) {
-          RecordData();
-          //cp5.remove(event.getController().getName());
-        }
-      }
-     } 
-     );   
 
      lblHR = cp5.addTextlabel("lblHR")
       .setText("Heartrate: --- bpm")
@@ -363,7 +350,7 @@ public void draw() {
  */
 public ArrayList<int[]> processArduinoData() {
   ArrayList<int[]> newData = new ArrayList<int[]>();
-  byte[] dataPacket = new byte[10]; // data packet with 10 bytes
+  byte[] dataPacket = new byte[100]; // data packet with 10 bytes
   while (arduinoPort.available() >= serialPacketLength && (arduinoPort.readBytesUntil(delimiter, dataPacket) == serialPacketLength)) {
     int[] dataPoints = decodeData(dataPacket);
     updatePoints(dataPoints);
@@ -542,31 +529,6 @@ public void CloseApp() {
     exit();
   } 
   else {
-  }
-}
-
-/**
- * start recording data in log file
- */
-public void RecordData() {
-  try {  
-    File logfile = new File(sketchPath() + "\\log.csv");
-    boolean fileExists = false;
-    if (logfile.exists()) {
-      fileExists = true;
-    }
-    datetimeReference = new Date();
-    output = new FileWriter(logfile, true);
-    bufferedWriter = new BufferedWriter(output);
-    if (!fileExists) {
-      bufferedWriter.write("timestamp,red,ir,hr,spo2,temp");
-      bufferedWriter.newLine();
-    }
-    prepareExitHandler();
-    logging = true;
-  }
-  catch(Exception e) {
-    println("File Not Found");
   }
 }
 
