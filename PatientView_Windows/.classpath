@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="src" path="resources"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER">
+		<attributes>
+			<attribute name="module" value="true"/>
+		</attributes>
+	</classpathentry>
+	<classpathentry kind="lib" path="C:/Users/lesle/OneDrive - Office 365 Fontys/Engineering Case/Bedside monitor/Bedside Monitor Module/Software/PatientView-Eclipse/PatientView_Windows/lib/core.jar"/>
+	<classpathentry kind="lib" path="C:/Users/lesle/OneDrive/Documenten/Processing/libraries/grafica/library/grafica.jar"/>
+	<classpathentry kind="lib" path="C:/Users/lesle/OneDrive/Documenten/Processing/libraries/httprequests_processing/library/commons-codec-1.4.jar"/>
+	<classpathentry kind="lib" path="C:/Users/lesle/OneDrive/Documenten/Processing/libraries/httprequests_processing/library/commons-logging-1.1.1.jar"/>
+	<classpathentry kind="lib" path="C:/Users/lesle/OneDrive/Documenten/Processing/libraries/httprequests_processing/library/httpclient-4.1.2.jar"/>
+	<classpathentry kind="lib" path="C:/Users/lesle/OneDrive/Documenten/Processing/libraries/httprequests_processing/library/httpclient-cache-4.1.2.jar"/>
+	<classpathentry kind="lib" path="C:/Users/lesle/OneDrive/Documenten/Processing/libraries/httprequests_processing/library/httpcore-4.1.2.jar"/>
+	<classpathentry kind="lib" path="C:/Users/lesle/OneDrive/Documenten/Processing/libraries/httprequests_processing/library/httpmime-4.1.2.jar"/>
+	<classpathentry kind="lib" path="C:/Users/lesle/OneDrive/Documenten/Processing/libraries/httprequests_processing/library/httprequests_processing.jar"/>
+	<classpathentry kind="lib" path="C:/Users/lesle/OneDrive/Documenten/Processing/libraries/G4P/library/G4P.jar"/>
+	<classpathentry kind="lib" path="C:/Users/lesle/OneDrive/Documenten/Processing/libraries/controlP5/library/controlP5.jar"/>
+	<classpathentry kind="lib" path="C:/Users/lesle/Portable_Apps/processing-3.5.4-windows64/processing-3.5.4/modes/java/libraries/serial/library/jssc.jar"/>
+	<classpathentry kind="lib" path="C:/Users/lesle/Portable_Apps/processing-3.5.4-windows64/processing-3.5.4/modes/java/libraries/serial/library/serial.jar"/>
+	<classpathentry kind="lib" path="C:/Users/lesle/Portable_Apps/processing-3.5.4-windows64/processing-3.5.4/modes/java/libraries/net/library/net.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>
