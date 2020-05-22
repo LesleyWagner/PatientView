@@ -24,6 +24,15 @@ public class SensorDataReceiver {
 	byte[] dataBytes = new byte[100];
 	final int delimiter = 0x00;
 	
+	static class UartPacket {
+		long packetID;
+		int red;
+		int ir;
+		int hr;
+		int spo2;
+		int temp;
+	}
+	
 	/**
 	 * Start serial connection.
 	 * @param applet - processing application object
@@ -52,11 +61,11 @@ public class SensorDataReceiver {
 	/**
 	 * process sensor data from sensor sent over serial usb
 	 */
-	ArrayList<int[]> processSensorData() {
-	  ArrayList<int[]> newData = new ArrayList<int[]>();
-	  byte[] dataPacket = new byte[100];
+	ArrayList<UartPacket> processSensorData() {
+	  ArrayList<UartPacket> newData = new ArrayList<>();
+	  byte[] dataPacket = new byte[10000];
 	  while (arduinoPort.available() >= serialPacketLength && (arduinoPort.readBytesUntil(delimiter, dataPacket) == serialPacketLength)) {
-	    int[] dataPoints = decodeData(dataPacket);
+	    UartPacket dataPoints = decodeData(dataPacket);
 	    newData.add(dataPoints);
 	  }
 	  
@@ -66,8 +75,8 @@ public class SensorDataReceiver {
 	/**
 	 * decode COBS from sensor data packet 
 	 */
-	int[] decodeData(byte[] dataPacket) {
-		int[] dataPoints = new int[5];
+	UartPacket decodeData(byte[] dataPacket) {
+		UartPacket decodedPacket = new UartPacket();
 		int delimiterIndex = dataPacket[0]; // overhead byte, index of next delimiter
 		for (int i = 1; i < serialPacketLength-1; i++) {
 			if (i == delimiterIndex) {
@@ -88,11 +97,11 @@ public class SensorDataReceiver {
 		int spo2 = dataPacket[6];
 		int temp = (((int)dataPacket[7] & 0xFF) << 8) | ((int)dataPacket[8] & 0xFF);
 
-		dataPoints[0] = red;
-		dataPoints[1] = ir;
-		dataPoints[2] = hr;
-		dataPoints[3] = spo2;
-		dataPoints[4] = temp;
+		decodedPacket.red = red;
+		decodedPacket.ir = ir;
+		decodedPacket.hr = hr;
+		decodedPacket.spo2 = spo2;
+		decodedPacket.temp = temp;
 
 		//print("red = ");
 		//println(red);
@@ -100,6 +109,6 @@ public class SensorDataReceiver {
 		//println(ir);
 		//println("");
 
-		return dataPoints;
+		return decodedPacket;
 	}
 }

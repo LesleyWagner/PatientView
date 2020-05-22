@@ -17,7 +17,6 @@ package patientviewrpi;
 
 import processing.core.*;
 import processing.data.*;
-import processing.serial.*;
 import processing.net.*;
 import grafica.*;
 
@@ -45,6 +44,8 @@ import java.text.SimpleDateFormat;
 import java.math.*;
 import controlP5.*;
 
+import patientviewrpi.SensorDataReceiver.UartPacket;
+
 /**
  * @author lesley wagner
  *
@@ -60,42 +61,10 @@ public class PatientViewRPI extends PApplet {
 	Textlabel lblTemp;
 	Textlabel lblMQTT;
 	Textlabel lblMQTTStatus;
-
-	int pSize = 250;   // 300 normally                                        // Total Size of the buffer
-	float time = 0;                                              // X axis increment variable
-
-	// Buffer for ecg,spo2,respiration,and average of those values
-	float[] xdata = new float[pSize];
-	float[] ecgdata = new float[pSize];
-	float[] reddata = new float[pSize];
-	float[] bpmArray = new float[pSize];
-	float[] ecg_avg = new float[pSize];                          
-	float[] resp_avg = new float[pSize];
-	float[] irdata = new float[pSize];
-	float[] spo2Array_IR = new float[pSize];
-	float[] spo2Array_RED = new float[pSize];
-	float[] rpmArray = new float[pSize];
-	float[] ppgArray = new float[pSize];
-
+	
 	/************** Graph Related Variables **********************/
-
-	double maxe, mine, maxr, minr, maxs, mins;             // To Calculate the Minimum and Maximum of the Buffer
-	double ecg, red, spo2_ir, spo2_red, ir, redAvg, irAvg, ecgAvg, resAvg;  // To store the current ecg value
 	boolean startPlot = false;                             // Conditional Variable to start and stop the plot
 
-	int step = 0;
-	int stepsPerCycle = 100;
-	int lastStepTime = 0;
-	boolean clockwise = true;
-	float scale = 5;
-
-	/************** file Related Variables **********************/
-
-	boolean logging = false;                                // Variable to check whether to record the data or not
-	FileWriter output;                                      // In-built writer class object to write the data to file
-	Date datetimeReference;                                 // datetime used as reference to determine time at a data point 
-	BufferedWriter bufferedWriter;
-	DateFormat dateFormat;
 
 	/************** Logo Related Variables **********************/
 
@@ -118,9 +87,6 @@ public class PatientViewRPI extends PApplet {
 	int heightHeader=100;
 
 	/************** Data Variables (Lesley) **********************/
-	int contentIndex = 0; // Index for data buffer arrays 
-	int plotIndex = 0; // Index for data buffers at the time of plotting
-	int prevPlotIndex = 0; // Index for data buffers at the previous time of plotting
 	LinkedList<Integer> dataBufferRed;
 	LinkedList<Integer> dataBufferIR;
 	LinkedList<Integer> dataBufferTemperature;
@@ -128,11 +94,8 @@ public class PatientViewRPI extends PApplet {
 	LinkedList<Integer> dataBufferSpo2;
 	int bufferSize = 0;
 	final int maxBufferSize = 100;
-	boolean newHrPoint = false;
-	int tempBufferIndex = 0;
 	boolean endDrawing = false;
 	boolean readyForDrawing = true;
-	final int period = 8; // time between data points
 
 	/************** Wifi network Variables (Lesley) **********************/
 	Server server;
@@ -145,16 +108,24 @@ public class PatientViewRPI extends PApplet {
 	/************** Serial Variables (Lesley) **********************/
 	SensorDataReceiver receiver = new SensorDataReceiver();
 
-	int global_hr;
-	int global_rr;
-	float global_temp;
-	int global_spo2;
-
-	int global_test=0;
-
-	boolean ECG_leadOff,spo2_leadOff;
-	boolean ShowWarning = true;
-	boolean ShowWarningSpo2=true;
+	/************** Alarm Variables (Lesley) **********************/
+//	boolean ECG_leadOff,spo2_leadOff;
+//	boolean ShowWarning = true;
+//	boolean ShowWarningSpo2=true;
+	boolean noData;
+	boolean noPox;
+	boolean noTemp;
+	boolean hrHigh;
+	boolean hrLow;
+	boolean spo2Low;
+	boolean tempHigh;
+	boolean tempLow;
+	final int hrBoundHigh = 200;
+	final int hrBoundLow = 50;
+	final int spo2BoundLow = 90;
+	final int tempBoundHigh = 390;
+	final int tempBoundLow = 340;
+	
 
 	/**
 	 * Set screen settings.
@@ -283,7 +254,8 @@ public class PatientViewRPI extends PApplet {
 	 */
 	public void draw() {	  
 		if (startPlot) {
-			ArrayList<int[]> newData = new ArrayList<int[]>();
+			ArrayList<UartPacket> uartData = new ArrayList<>();
+			ArrayList<WifiPacket> wifiData = new ArrayList<>();
 
 			if (testing) {
 //				// cancel test timer when we run out of data
@@ -291,18 +263,44 @@ public class PatientViewRPI extends PApplet {
 //					testTimer.cancel();
 //					startPlot = false;
 //				}
-				newData = testStreamer.getDataPoints();
+				uartData = testStreamer.getDataPoints();
 			} 
 			else {
-				newData = receiver.processSensorData();				
+				uartData = receiver.processSensorData();				
 			}
-			updatePoints(newData);
-
-			if (server.active()) {
-				ArrayList<byte[]> encodedData = encodeData(newData);
-				sendSensorData(encodedData);
+			
+			// new data packets from receiver?
+			if (uartData.size() > 0) {
+				noData = false;
+				
+				updateData(uartData);
+				
+				for (int i = 0; i < uartData.size(); i++) {
+					UartPacket uartPacket = uartData.get(i);
+					WifiPacket wifiPacket = new WifiPacket();
+					byte alarmsByte = 0;
+					
+					if (bufferSize-uartData.size()+i > 2) {
+						alarmsByte = determineAlarms(bufferSize-uartData.size()+i);
+					}
+					
+					wifiPacket.red = uartPacket.red;
+					wifiPacket.ir = uartPacket.ir;
+					wifiPacket.hr = uartPacket.hr;
+					wifiPacket.spo2 = uartPacket.spo2;
+					wifiPacket.temp = uartPacket.temp;
+					wifiPacket.alarms = alarmsByte;
+				}
+				
+				if (server.active()) {
+					ArrayList<byte[]> encodedData = encodeData(wifiData);
+					sendSensorData(encodedData);
+				}
 			}
-
+			else {
+				noData = true;
+			}
+			
 			drawData();
 		}
 	}
@@ -310,13 +308,13 @@ public class PatientViewRPI extends PApplet {
 	/**
 	 * updates data points
 	 */
-	void updatePoints(ArrayList<int[]> newData) {
-		for (int[] dataPoints : newData) {
-			int red = dataPoints[0];
-			int ir = dataPoints[1];
-			int hr = dataPoints[2];
-			int spo2 = dataPoints[3];
-			int temp = dataPoints[4];
+	void updateData(ArrayList<UartPacket> newData) {
+		for (UartPacket dataPacket : newData) {
+			int red = dataPacket.red;
+			int ir = dataPacket.ir;
+			int hr = dataPacket.hr;
+			int spo2 = dataPacket.spo2;
+			int temp = dataPacket.temp;
 	
 			// add new points to buffers
 			dataBufferRed.addLast(red);   
@@ -347,38 +345,127 @@ public class PatientViewRPI extends PApplet {
 				dataBufferHr.removeFirst();
 				dataBufferSpo2.removeFirst();
 				dataBufferTemperature.removeFirst();
+				bufferSize--;
 			}
 		}
+	}
+	
+	/**
+	 * Determine alarms.
+	 * 
+	 * @param packetIndex - index in the databuffers from data points in the data packet.
+	 */
+	byte determineAlarms(int packetIndex) {
+		byte alarms = 0;	
+		noPox = false;
+		noTemp = false;
+		hrHigh = false;
+		hrLow = false;
+		spo2Low = false;
+		tempHigh = false;
+		tempLow = false;
+		
+		// no uart data if no packets received
+		if (noData) {
+			alarms += 1;
+		}
+		alarms <<= 1;
+		
+		// no pulse oximeter data if last three hr and spo2 data points are 0
+		boolean noHrData = false;
+		boolean noSpo2Data = false;
+		if (dataBufferHr.get(packetIndex) == 0 && dataBufferHr.get(packetIndex-1) == 0 && 
+				dataBufferHr.get(packetIndex-2) == 0) {
+			noHrData = true;
+		}
+		if (dataBufferSpo2.get(packetIndex) == 0 && dataBufferSpo2.get(packetIndex-1) == 0 && 
+				dataBufferSpo2.get(packetIndex-2) == 0) {
+			noSpo2Data = true;
+		}
+		if (noHrData && noSpo2Data) {
+			noPox = true;
+			alarms += 1;
+		}
+		alarms <<= 1;
+		
+		// no temperature data if last three temperature data points are 0
+		if (dataBufferTemperature.get(packetIndex) == 0 && dataBufferTemperature.get(packetIndex-1) == 0 && 
+				dataBufferTemperature.get(packetIndex-2) == 0) {
+			noTemp = true;
+			alarms += 1;
+		}
+		alarms <<= 1;
+		
+		// heart rate too high if last three heart rate data points > 200 (bpm)
+		if (dataBufferHr.get(packetIndex) > hrBoundHigh && dataBufferHr.get(packetIndex-1) > hrBoundHigh &&
+				dataBufferHr.get(packetIndex-2) > hrBoundHigh) {
+			hrHigh = true;
+			alarms += 1;
+		}			
+		alarms <<= 1;
+		
+		// heart rate too low if last three heart rate data points < 50 (bpm)
+		if (dataBufferHr.get(packetIndex) < hrBoundLow && dataBufferHr.get(packetIndex-1) < hrBoundLow &&
+				dataBufferHr.get(packetIndex-2) < hrBoundLow) {
+			hrLow = true;
+			alarms += 1;
+		}			
+		alarms <<= 1;
+		
+		// spo2 too low if last three spo2 data points < 90 (%)
+		if (dataBufferSpo2.get(packetIndex) < spo2BoundLow && dataBufferSpo2.get(packetIndex-1) < spo2BoundLow &&
+				dataBufferSpo2.get(packetIndex-2) < spo2BoundLow) {
+			spo2Low = true;
+			alarms += 1;
+		}	
+		alarms <<= 1;
+		
+		// temperature too high if last three temperature data points > 390 (decicelcius)
+		if (dataBufferTemperature.get(packetIndex) > tempBoundHigh && dataBufferTemperature.get(packetIndex-1) > tempBoundHigh &&
+				dataBufferTemperature.get(packetIndex-2) > tempBoundHigh) {
+			tempHigh = true;
+			alarms += 1;
+		}			
+		alarms <<= 1;
+		
+		// temperature too low if last three temperature data points < 340 (decicelcius)
+		if (dataBufferTemperature.get(packetIndex) < tempBoundLow && dataBufferTemperature.get(packetIndex-1) < tempBoundLow &&
+				dataBufferTemperature.get(packetIndex-2) < tempBoundLow) {
+			tempLow = true;
+			alarms += 1;
+		}	
+		
+		return alarms;
 	}
 
 	/**
 	 * encode data with COBS
 	 */
-	ArrayList<byte[]> encodeData(ArrayList<int[]> newData) {
+	ArrayList<byte[]> encodeData(ArrayList<WifiPacket> newData) {
 		ArrayList<byte[]> encodedData = new ArrayList<byte[]>();
 
-		for (int[] dataPoint : newData) { 
-			byte[] dataPacket = new byte[10];
+		for (WifiPacket dataPacket : newData) { 
+			byte[] encodedPacket = new byte[10];
 			int overhead = wifiPacketLength-1;
 
 			// split data into individual bytes
-			int red = dataPoint[0];
-			dataPacket[1] = (byte) (red >> 8);
-			dataPacket[2] = (byte) red;
-			int ir = dataPoint[1];
-			dataPacket[3] = (byte) (ir >> 8);
-			dataPacket[4] = (byte) ir;
-			int hr = dataPoint[2];
-			dataPacket[5] = (byte) hr;
-			int spo2 = dataPoint[3];
-			dataPacket[6] = (byte) spo2;
-			int temp = dataPoint[4];
-			dataPacket[7] = (byte) (temp >> 8);
-			dataPacket[8] = (byte) temp;
+			int red = dataPacket.red;
+			encodedPacket[1] = (byte) (red >> 8);
+			encodedPacket[2] = (byte) red;
+			int ir = dataPacket.ir;
+			encodedPacket[3] = (byte) (ir >> 8);
+			encodedPacket[4] = (byte) ir;
+			int hr = dataPacket.hr;
+			encodedPacket[5] = (byte) hr;
+			int spo2 = dataPacket.spo2;
+			encodedPacket[6] = (byte) spo2;
+			int temp = dataPacket.temp;
+			encodedPacket[7] = (byte) (temp >> 8);
+			encodedPacket[8] = (byte) temp;
 
 			// transform data with COBS protocol 
-			dataPacket[0] = (byte) overhead;
-			dataPacket[9] = delimiter;
+			encodedPacket[0] = (byte) overhead;
+			encodedPacket[9] = delimiter;
 
 			// for debugging 
 			//println("untransformed datapacket");
@@ -388,12 +475,12 @@ public class PatientViewRPI extends PApplet {
 
 			int delimiterIndex = 0;     
 			for (int i = 1; i < wifiPacketLength-1; i++) {
-				if (dataPacket[i] == delimiter) {
-					dataPacket[delimiterIndex] = (byte) (i-delimiterIndex);
+				if (encodedPacket[i] == delimiter) {
+					encodedPacket[delimiterIndex] = (byte) (i-delimiterIndex);
 					delimiterIndex = i;
 				}     
 			}      
-			dataPacket[delimiterIndex] = (byte) (wifiPacketLength-1-delimiterIndex);
+			encodedPacket[delimiterIndex] = (byte) (wifiPacketLength-1-delimiterIndex);
 
 			// for debugging
 			//println("transformed datapacket:");
@@ -401,7 +488,7 @@ public class PatientViewRPI extends PApplet {
 			//  println(dataPacket[i]);
 			//}
 
-			encodedData.add(dataPacket);
+			encodedData.add(encodedPacket);
 		}
 		return encodedData;
 	}
@@ -467,43 +554,18 @@ public class PatientViewRPI extends PApplet {
 	    });
 	}
 
-	/*
-	 * write new data record in log file
-	 */
-	void logData(float red, float ir, float hr, float spo2, float temperature) {
-		try {
-			dateFormat = new SimpleDateFormat("HH:mm:ss:SSS");
-			long millisReference = datetimeReference.getTime();
-			long currentMillis = millisReference + period;
-			datetimeReference.setTime(currentMillis);
-			bufferedWriter.write(dateFormat.format(datetimeReference) + "," + red + "," + ir +
-					"," + String.format("%.0f", hr) + "," + String.format("%.0f", spo2) + "," + String.format("%.2f", temperature));
-			bufferedWriter.newLine();
-		}
-		catch(IOException e) {
-			println("It broke!!!");
-			e.printStackTrace();
-		}
-	}
-
 	/**
 	 * close log file on exit
 	 */
 	void prepareExitHandler() {
-		Thread logfileHook = new Thread(new Runnable() {
+		Thread exitHook = new Thread(new Runnable() {
 			public void run() {
 				if (testing) {
 					testStreamer.stop();
 				}
-				try {
-					bufferedWriter.close();
-				}
-				catch (IOException e) {
-					e.printStackTrace();
-				}
 			}}
 				);
-		Runtime.getRuntime().addShutdownHook(logfileHook);
+		Runtime.getRuntime().addShutdownHook(exitHook);
 	}
 
 	/**

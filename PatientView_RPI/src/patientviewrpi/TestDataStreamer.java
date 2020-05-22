@@ -7,6 +7,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.TimerTask;
+
+import patientviewrpi.SensorDataReceiver.UartPacket;
+
 import java.util.ArrayList;
 import java.util.Timer;
 
@@ -88,8 +91,8 @@ public class TestDataStreamer {
 	 * 
 	 * @returns list of integer arrays with new data points
 	 */
-	public ArrayList<int[]> getDataPoints() {
-		ArrayList<int[]> newData = new ArrayList<int[]>();
+	ArrayList<UartPacket> getDataPoints() {
+		ArrayList<UartPacket> newData = new ArrayList<>();
 		int nNewPoints = 0;
 
 		currentIndex = contentIndex;
@@ -125,13 +128,13 @@ public class TestDataStreamer {
 			int temp = dataBufferTestTemperature[bufferIndex];   
 
 			// add new point for transmitting
-			int[] newDataPoint = new int[5];
-			newDataPoint[0] = red;
-			newDataPoint[1] = ir;
-			newDataPoint[2] = hr;
-			newDataPoint[3] = spo2;
-			newDataPoint[4] = temp;
-			newData.add(newDataPoint);
+			UartPacket newDataPacket = new UartPacket();
+			newDataPacket.red = red;
+			newDataPacket.ir = ir;
+			newDataPacket.hr = hr;
+			newDataPacket.spo2 = spo2;
+			newDataPacket.temp = temp;
+			newData.add(newDataPacket);
 
 			bufferIndex = bufferIndex + 1;            
 		} 
