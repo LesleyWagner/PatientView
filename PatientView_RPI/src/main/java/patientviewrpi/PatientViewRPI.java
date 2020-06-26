@@ -16,9 +16,9 @@
 package patientviewrpi;
 
 import processing.core.*;
-import processing.data.*;
 import processing.net.*;
 import grafica.*;
+import controlP5.*;
 
 // Java Swing Package For prompting message
 import java.awt.*;
@@ -27,22 +27,11 @@ import static javax.swing.JOptionPane.*;
 
 // File Packages to record the data into a text file
 import javax.swing.JFileChooser;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileReader;
+
 // Date Format
 import java.util.*;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-
-// General Java Package
-import java.math.*;
-import controlP5.*;
 
 import patientviewrpi.SensorDataReceiver.UartPacket;
 
@@ -53,29 +42,17 @@ import patientviewrpi.SensorDataReceiver.UartPacket;
 public class PatientViewRPI extends PApplet {
 
 	ControlP5 cp5;
-
 	Textlabel lblHR;
 	Textlabel lblSPO2;
-	Textlabel lblRR;
-	Textlabel lblBP;
 	Textlabel lblTemp;
-	Textlabel lblMQTT;
-	Textlabel lblMQTTStatus;
-	
-	/************** Graph Related Variables **********************/
-	boolean startPlot = false;                             // Conditional Variable to start and stop the plot
-
-
-	/************** Logo Related Variables **********************/
-
-	PImage logo;
-	boolean gStatus;                                        // Boolean variable to save the grid visibility status
+	Textlabel lblAlarm;
 
 	/************** Testing Related Variables (Lesley) **********************/
-	boolean testing = true; // true if testing
+	boolean testing = false; // true if testing
 	TestDataStreamer testStreamer;
 
 	/************** Plotting Variables (Lesley) **********************/
+	boolean startPlot = false;    
 	GPlot plotIR;
 	GPlot plotRed;
 	GPointsArray pointsRed;
@@ -92,26 +69,22 @@ public class PatientViewRPI extends PApplet {
 	LinkedList<Integer> dataBufferTemperature;
 	LinkedList<Integer> dataBufferHr;
 	LinkedList<Integer> dataBufferSpo2;
-	int bufferSize = 0;
-	final int maxBufferSize = 100;
-	boolean endDrawing = false;
-	boolean readyForDrawing = true;
+	final int bufferSize = 100;
 
 	/************** Wifi network Variables (Lesley) **********************/
 	Server server;
 	final int wifiPort = 12345;
 	int wifiPacketCounter = 0;
-	final int wifiDataLength = 8;
-	final int wifiPacketLength = 10;
+	final int wifiDataLength = 17;
+	final int wifiPacketLength = 19;
 	final int delimiter = 0x00;
 
 	/************** Serial Variables (Lesley) **********************/
 	SensorDataReceiver receiver = new SensorDataReceiver();
 
 	/************** Alarm Variables (Lesley) **********************/
-//	boolean ECG_leadOff,spo2_leadOff;
-//	boolean ShowWarning = true;
-//	boolean ShowWarningSpo2=true;
+	LinkedList<Boolean> noDataBuffer;
+	final int noDataBufferSize = 30;
 	boolean noData;
 	boolean noPox;
 	boolean noTemp;
@@ -125,14 +98,13 @@ public class PatientViewRPI extends PApplet {
 	final int spo2BoundLow = 90;
 	final int tempBoundHigh = 390;
 	final int tempBoundLow = 340;
-	
 
 	/**
 	 * Set screen settings.
 	 */
 	public void settings() {
-		size(1000, 600);
-		// fullScreen(P2D);
+		//size(1000, 600);
+		fullScreen();
 	}
 
 	/**
@@ -179,6 +151,19 @@ public class PatientViewRPI extends PApplet {
 		dataBufferTemperature = new LinkedList<Integer>();
 		dataBufferHr = new LinkedList<Integer>();
 		dataBufferSpo2 = new LinkedList<Integer>();
+		noDataBuffer = new LinkedList<Boolean>();
+		
+		for (int i = 0; i < bufferSize; i++) {
+			dataBufferRed.push(0);
+			dataBufferIR.push(0);
+			dataBufferTemperature.push(0);
+			dataBufferHr.push(0);
+			dataBufferSpo2.push(0);
+		}
+		
+		for (int i = 0; i < noDataBufferSize; i++) {
+			noDataBuffer.push(false);
+		}
 		
 		server = new Server(this, wifiPort);
 
@@ -215,38 +200,25 @@ public class PatientViewRPI extends PApplet {
 				.setText("Heartrate: --- bpm")
 				.setPosition(width-250,100)
 				.setColorValue(color(255,255,255))
-				.setFont(createFont("Impact",24));
+				.setFont(createFont("Impact",22));
 
 		lblSPO2 = cp5.addTextlabel("lblSPO2")
 				.setText("SpO2: --- %")
 				.setPosition(width-250,150)
 				.setColorValue(color(255,255,255))
-				.setFont(createFont("Impact",24));
-
-		//lblRR = cp5.addTextlabel("lblRR")
-		//.setText("Respiration: --- bpm")
-		//.setPosition(width-350,(totalPlotsHeight/3+totalPlotsHeight/3+10))
-		//.setColorValue(color(255,255,255))
-		//.setFont(createFont("Impact",40));
-
-		/*
-	    lblBP = cp5.addTextlabel("lblBP")
-	      .setText("BP: --- / ---")
-	      .setPosition((width-250),height-25)
-	      .setColorValue(color(255,255,255))
-	      .setFont(createFont("Verdana",20));
-		 */
+				.setFont(createFont("Impact",22));
 
 		lblTemp = cp5.addTextlabel("lblTemp")
 				.setText("Temperature: --- \u00B0 C")
 				.setPosition(width-250,200)
 				.setColorValue(color(255,255,255))
-				.setFont(createFont("Impact",24));
-
-		cp5.addButton("logo")
-		.setPosition(20,10)
-		.setImages(loadImage("protocentral.png"), loadImage("protocentral.png"), loadImage("protocentral.png"))
-		.updateSize();         
+				.setFont(createFont("Impact",22));
+		
+		lblAlarm = cp5.addTextlabel("lblAlarm")
+				.setText("Test for alarm message")
+				.setPosition(width-250,250)
+				.setColorValue(color(255,0,0))
+				.setFont(createFont("Impact",16));
 	}
 
 	/**
@@ -255,14 +227,8 @@ public class PatientViewRPI extends PApplet {
 	public void draw() {	  
 		if (startPlot) {
 			ArrayList<UartPacket> uartData = new ArrayList<>();
-			ArrayList<WifiPacket> wifiData = new ArrayList<>();
 
 			if (testing) {
-//				// cancel test timer when we run out of data
-//				if (testDataIndex > 2490) {
-//					testTimer.cancel();
-//					startPlot = false;
-//				}
 				uartData = testStreamer.getDataPoints();
 			} 
 			else {
@@ -271,36 +237,30 @@ public class PatientViewRPI extends PApplet {
 			
 			// new data packets from receiver?
 			if (uartData.size() > 0) {
-				noData = false;
+				noData = false;	
 				
-				updateData(uartData);
-				
-				for (int i = 0; i < uartData.size(); i++) {
-					UartPacket uartPacket = uartData.get(i);
-					WifiPacket wifiPacket = new WifiPacket();
-					byte alarmsByte = 0;
-					
-					if (bufferSize-uartData.size()+i > 2) {
-						alarmsByte = determineAlarms(bufferSize-uartData.size()+i);
-					}
-					
-					wifiPacket.red = uartPacket.red;
-					wifiPacket.ir = uartPacket.ir;
-					wifiPacket.hr = uartPacket.hr;
-					wifiPacket.spo2 = uartPacket.spo2;
-					wifiPacket.temp = uartPacket.temp;
-					wifiPacket.alarms = alarmsByte;
+				for (int i = 0; i < noDataBufferSize; i++) {
+					noDataBuffer.set(i, false);
 				}
+				updateData(uartData);	
+				
+				byte alarmsByte = determineAlarms();
 				
 				if (server.active()) {
-					ArrayList<byte[]> encodedData = encodeData(wifiData);
+					ArrayList<byte[]> encodedData = encodeData(uartData, alarmsByte);
 					sendSensorData(encodedData);
 				}
 			}
 			else {
-				noData = true;
-			}
-			
+				noDataBuffer.addLast(true);
+				noDataBuffer.removeFirst();
+				
+				// if no we have no data for the last 30 frames (1 second), then set no data alarm
+				if (!noDataBuffer.contains(false)) {
+					noData = true;
+				}
+			}	
+					
 			drawData();
 		}
 	}
@@ -322,7 +282,6 @@ public class PatientViewRPI extends PApplet {
 			dataBufferHr.addLast(hr);
 			dataBufferSpo2.addLast(spo2);
 			dataBufferTemperature.addLast(temp);
-			bufferSize++;
 	
 			// add points to plots
 			pointsRed.add(nPoints, nPoints, red);
@@ -339,14 +298,11 @@ public class PatientViewRPI extends PApplet {
 			}    
 	
 			// remove old points from buffers
-			if (bufferSize == maxBufferSize) {
-				dataBufferRed.removeFirst();
-				dataBufferIR.removeFirst();
-				dataBufferHr.removeFirst();
-				dataBufferSpo2.removeFirst();
-				dataBufferTemperature.removeFirst();
-				bufferSize--;
-			}
+			dataBufferRed.removeFirst();
+			dataBufferIR.removeFirst();
+			dataBufferHr.removeFirst();
+			dataBufferSpo2.removeFirst();
+			dataBufferTemperature.removeFirst();
 		}
 	}
 	
@@ -355,7 +311,7 @@ public class PatientViewRPI extends PApplet {
 	 * 
 	 * @param packetIndex - index in the databuffers from data points in the data packet.
 	 */
-	byte determineAlarms(int packetIndex) {
+	byte determineAlarms() {
 		byte alarms = 0;	
 		noPox = false;
 		noTemp = false;
@@ -374,12 +330,12 @@ public class PatientViewRPI extends PApplet {
 		// no pulse oximeter data if last three hr and spo2 data points are 0
 		boolean noHrData = false;
 		boolean noSpo2Data = false;
-		if (dataBufferHr.get(packetIndex) == 0 && dataBufferHr.get(packetIndex-1) == 0 && 
-				dataBufferHr.get(packetIndex-2) == 0) {
+		if (dataBufferHr.get(bufferSize-3) == 0 && dataBufferHr.get(bufferSize-1) == 0 && 
+				dataBufferHr.get(bufferSize-2) == 0) {
 			noHrData = true;
 		}
-		if (dataBufferSpo2.get(packetIndex) == 0 && dataBufferSpo2.get(packetIndex-1) == 0 && 
-				dataBufferSpo2.get(packetIndex-2) == 0) {
+		if (dataBufferSpo2.get(bufferSize-3) == 0 && dataBufferSpo2.get(bufferSize-1) == 0 && 
+				dataBufferSpo2.get(bufferSize-2) == 0) {
 			noSpo2Data = true;
 		}
 		if (noHrData && noSpo2Data) {
@@ -389,48 +345,48 @@ public class PatientViewRPI extends PApplet {
 		alarms <<= 1;
 		
 		// no temperature data if last three temperature data points are 0
-		if (dataBufferTemperature.get(packetIndex) == 0 && dataBufferTemperature.get(packetIndex-1) == 0 && 
-				dataBufferTemperature.get(packetIndex-2) == 0) {
+		if (dataBufferTemperature.get(bufferSize-3) == 0 && dataBufferTemperature.get(bufferSize-1) == 0 && 
+				dataBufferTemperature.get(bufferSize-2) == 0) {
 			noTemp = true;
 			alarms += 1;
 		}
 		alarms <<= 1;
 		
 		// heart rate too high if last three heart rate data points > 200 (bpm)
-		if (dataBufferHr.get(packetIndex) > hrBoundHigh && dataBufferHr.get(packetIndex-1) > hrBoundHigh &&
-				dataBufferHr.get(packetIndex-2) > hrBoundHigh) {
+		if (dataBufferHr.get(bufferSize-3) > hrBoundHigh && dataBufferHr.get(bufferSize-1) > hrBoundHigh &&
+				dataBufferHr.get(bufferSize-2) > hrBoundHigh) {
 			hrHigh = true;
 			alarms += 1;
 		}			
 		alarms <<= 1;
 		
 		// heart rate too low if last three heart rate data points < 50 (bpm)
-		if (dataBufferHr.get(packetIndex) < hrBoundLow && dataBufferHr.get(packetIndex-1) < hrBoundLow &&
-				dataBufferHr.get(packetIndex-2) < hrBoundLow) {
+		if (dataBufferHr.get(bufferSize-3) < hrBoundLow && dataBufferHr.get(bufferSize-1) < hrBoundLow &&
+				dataBufferHr.get(bufferSize-2) < hrBoundLow) {
 			hrLow = true;
 			alarms += 1;
 		}			
 		alarms <<= 1;
 		
 		// spo2 too low if last three spo2 data points < 90 (%)
-		if (dataBufferSpo2.get(packetIndex) < spo2BoundLow && dataBufferSpo2.get(packetIndex-1) < spo2BoundLow &&
-				dataBufferSpo2.get(packetIndex-2) < spo2BoundLow) {
+		if (dataBufferSpo2.get(bufferSize-3) < spo2BoundLow && dataBufferSpo2.get(bufferSize-1) < spo2BoundLow &&
+				dataBufferSpo2.get(bufferSize-2) < spo2BoundLow) {
 			spo2Low = true;
 			alarms += 1;
 		}	
 		alarms <<= 1;
 		
 		// temperature too high if last three temperature data points > 390 (decicelcius)
-		if (dataBufferTemperature.get(packetIndex) > tempBoundHigh && dataBufferTemperature.get(packetIndex-1) > tempBoundHigh &&
-				dataBufferTemperature.get(packetIndex-2) > tempBoundHigh) {
+		if (dataBufferTemperature.get(bufferSize-3) > tempBoundHigh && dataBufferTemperature.get(bufferSize-1) > tempBoundHigh &&
+				dataBufferTemperature.get(bufferSize-2) > tempBoundHigh) {
 			tempHigh = true;
 			alarms += 1;
 		}			
 		alarms <<= 1;
 		
 		// temperature too low if last three temperature data points < 340 (decicelcius)
-		if (dataBufferTemperature.get(packetIndex) < tempBoundLow && dataBufferTemperature.get(packetIndex-1) < tempBoundLow &&
-				dataBufferTemperature.get(packetIndex-2) < tempBoundLow) {
+		if (dataBufferTemperature.get(bufferSize-3) < tempBoundLow && dataBufferTemperature.get(bufferSize-1) < tempBoundLow &&
+				dataBufferTemperature.get(bufferSize-2) < tempBoundLow) {
 			tempLow = true;
 			alarms += 1;
 		}	
@@ -441,31 +397,42 @@ public class PatientViewRPI extends PApplet {
 	/**
 	 * encode data with COBS
 	 */
-	ArrayList<byte[]> encodeData(ArrayList<WifiPacket> newData) {
+	ArrayList<byte[]> encodeData(ArrayList<UartPacket> newData, byte alarms) {
 		ArrayList<byte[]> encodedData = new ArrayList<byte[]>();
 
-		for (WifiPacket dataPacket : newData) { 
-			byte[] encodedPacket = new byte[10];
+		for (UartPacket dataPacket : newData) { 
+			byte[] encodedPacket = new byte[wifiPacketLength];
 			int overhead = wifiPacketLength-1;
 
 			// split data into individual bytes
+			// packet ID not used for now
+			long packetID = dataPacket.packetID;
+			encodedPacket[1] = (byte) (packetID >> 56);
+			encodedPacket[2] = (byte) (packetID >> 48);
+			encodedPacket[3] = (byte) (packetID >> 40);
+			encodedPacket[4] = (byte) (packetID >> 32);
+			encodedPacket[5] = (byte) (packetID >> 24);
+			encodedPacket[6] = (byte) (packetID >> 16);
+			encodedPacket[7] = (byte) (packetID >> 8);
+			encodedPacket[8] = (byte) packetID;
 			int red = dataPacket.red;
-			encodedPacket[1] = (byte) (red >> 8);
-			encodedPacket[2] = (byte) red;
+			encodedPacket[9] = (byte) (red >> 8);
+			encodedPacket[10] = (byte) red;
 			int ir = dataPacket.ir;
-			encodedPacket[3] = (byte) (ir >> 8);
-			encodedPacket[4] = (byte) ir;
+			encodedPacket[11] = (byte) (ir >> 8);
+			encodedPacket[12] = (byte) ir;
 			int hr = dataPacket.hr;
-			encodedPacket[5] = (byte) hr;
+			encodedPacket[13] = (byte) hr;
 			int spo2 = dataPacket.spo2;
-			encodedPacket[6] = (byte) spo2;
+			encodedPacket[14] = (byte) spo2;
 			int temp = dataPacket.temp;
-			encodedPacket[7] = (byte) (temp >> 8);
-			encodedPacket[8] = (byte) temp;
+			encodedPacket[15] = (byte) (temp >> 8);
+			encodedPacket[16] = (byte) temp;
+			encodedPacket[17] = alarms;
 
 			// transform data with COBS protocol 
 			encodedPacket[0] = (byte) overhead;
-			encodedPacket[9] = delimiter;
+			encodedPacket[18] = delimiter;
 
 			// for debugging 
 			//println("untransformed datapacket");
@@ -494,7 +461,7 @@ public class PatientViewRPI extends PApplet {
 	}
 
 	/**
-	 * send sensor data packets to laptop over wifi
+	 * send sensor data packets to laptop over wifis
 	 */
 	void sendSensorData(ArrayList<byte[]> newData) {
 		for (byte[] dataPacket : newData) {
@@ -502,20 +469,95 @@ public class PatientViewRPI extends PApplet {
 		}
 	}
 
-	/**
-	 * draw new data on the screen.
+	/**	 * draw new data on the screen.
 	 */
 	void drawData() {	
+		background(19,75,102);
+		
 		// add new parameter readings to GUI
-		lblHR.setText("Heartrate: " + String.valueOf(dataBufferHr.getLast()) + " bpm");
-		lblSPO2.setText("SpO2: " + String.valueOf(dataBufferSpo2.getLast()) + " %");
-		lblTemp.setText("Temperature: " + String.format("%.1f", dataBufferTemperature.getLast()/(float)10) + " \u00B0 C");
-
+		lblHR.setColorValue(color(255,255,255));
+		lblSPO2.setColorValue(color(255,255,255));
+		lblTemp.setColorValue(color(255,255,255));	
+		
+		if (noData) {
+			lblAlarm.setText("No connection with wrist band");
+			lblTemp.setText("Temperature: ---");
+			lblHR.setText("Heartrate: ---");
+			lblSPO2.setText("SpO2: ---");
+		}
+		else if (noTemp || noPox || hrHigh || hrLow || spo2Low || tempHigh || tempLow) {
+			if (noTemp) {				
+				if (hrHigh) {
+					lblHR.setColorValue(color(255,0,0));
+				}
+				else if (hrLow) {
+					lblHR.setColorValue(color(255,0,0));
+				}
+				if (spo2Low) {
+					lblSPO2.setColorValue(color(255,0,0));
+				}
+				
+				lblTemp.setText("Temperature: ---");
+				lblAlarm.setText("No readings from temp sensor");
+				lblHR.setText("Heartrate: " + String.valueOf(dataBufferHr.getLast()) + " bpm");
+				lblSPO2.setText("SpO2: " + String.valueOf(dataBufferSpo2.getLast()) + " %");
+			}	
+			else if (noPox) {			
+				if (tempHigh) {
+					lblTemp.setColorValue(color(255,0,0));
+					lblAlarm.setText("Temperature is too high");
+				}
+				else if (tempLow) {
+					lblTemp.setColorValue(color(255,0,0));
+					lblAlarm.setText("Temperature is too low");
+				}
+				
+				lblHR.setText("Heartrate: ---");
+				lblSPO2.setText("SpO2: ---");
+				lblAlarm.setText("No readings from pox sensor");
+				lblTemp.setText("Temperature: " + String.format("%.1f", dataBufferTemperature.getLast()/(float)10) + " \u00B0C");
+			}
+			else {
+				if (hrHigh) {
+					lblHR.setColorValue(color(255,0,0));
+					lblAlarm.setText("Heart rate is too high");
+				}
+				else if (hrLow) {
+					lblHR.setColorValue(color(255,0,0));
+					lblAlarm.setText("Heart rate is too low");
+				}
+				if (spo2Low) {
+					lblSPO2.setColorValue(color(255,0,0));
+					lblAlarm.setText("SPO2 level is too low");
+				}
+				if (tempHigh) {
+					lblTemp.setColorValue(color(255,0,0));
+					lblAlarm.setText("Temperature is too high");
+				}
+				else if (tempLow) {
+					lblTemp.setColorValue(color(255,0,0));
+					lblAlarm.setText("Temperature is too low");
+				}
+				
+				lblHR.setText("Heartrate: " + String.valueOf(dataBufferHr.getLast()) + " bpm");
+				lblSPO2.setText("SpO2: " + String.valueOf(dataBufferSpo2.getLast()) + " %");
+				lblTemp.setText("Temperature: " + String.format("%.1f", dataBufferTemperature.getLast()/(float)10) + " \u00B0 C");	
+			}
+		}		
+		else {
+			lblAlarm.setText("");
+			lblHR.setText("Heartrate: " + String.valueOf(dataBufferHr.getLast()) + " bpm");
+			lblSPO2.setText("SpO2: " + String.valueOf(dataBufferSpo2.getLast()) + " %");
+			lblTemp.setText("Temperature: " + String.format("%.1f", dataBufferTemperature.getLast()/(float)10) + " \u00B0 C");	
+		}
+		
+		System.out.println(dataBufferHr.getLast());
+		System.out.println(dataBufferSpo2.getLast());
+		System.out.println(dataBufferTemperature.getLast());
+		System.out.println();
+		
 		plotRed.setPoints(pointsRed);
 		plotIR.setPoints(pointsIR);
-
-		background(19,75,102);
-
 		plotRed.beginDraw();
 		plotRed.drawBackground();
 		plotRed.drawLines();
@@ -525,8 +567,6 @@ public class PatientViewRPI extends PApplet {
 		plotIR.drawBackground();
 		plotIR.drawLines();
 		plotIR.endDraw();
-
-		endDrawing = true;
 	}
 
 	/**

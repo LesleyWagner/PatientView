@@ -99,8 +99,11 @@ public class TestDataStreamer {
 		if (currentIndex > prevIndex) {
 			nNewPoints = currentIndex - prevIndex;;
 		}
-		else {
+		else if (currentIndex < prevIndex) {
 			nNewPoints = currentIndex + testBufferSize - prevIndex;
+		}
+		else {
+			nNewPoints = 0;
 		}
 
 //		// remove n points at the beginning of the plot
@@ -161,6 +164,11 @@ public class TestDataStreamer {
 				hrFrequencyIndex++;
 			}
 			testDataIndex++;
+			
+			// end of test data
+			if (testDataIndex == ecgTestDataSync.size()-1) {
+				testTimer.cancel();
+			}
 		}
 	};
 	
@@ -169,7 +177,7 @@ public class TestDataStreamer {
 	 */
 	private void readTestData() {
 		// ecg test values
-		try (InputStream ecgInput = new FileInputStream(new File(getClass().getResource("/ecg_testdata.csv").toURI()))) {
+		try (InputStream ecgInput = getClass().getResourceAsStream("/ecg_testdata.csv")) {
 			String[] ecgFileContents = PApplet.loadStrings(ecgInput); // contents of ecg data file
 			String[] ecgTestDataStrings = ecgFileContents[0].split(",");
 			IntList ecgTestData = new IntList();
@@ -194,7 +202,7 @@ public class TestDataStreamer {
 		}
 
 		// ppg test values
-		try (InputStream ppgInput = new FileInputStream(new File(getClass().getResource("/bidmc_01_Signals.csv").toURI()))) {
+		try (InputStream ppgInput = getClass().getResourceAsStream("/bidmc_01_Signals.csv")) {
 			Table ppgTestTable = new Table (ppgInput, "csv, header");
 			ppgTestData = new IntList();  
 			for (TableRow row : ppgTestTable.rows()) {    
@@ -211,9 +219,9 @@ public class TestDataStreamer {
 			e.printStackTrace();
 			System.out.println("PPG file not found.");
 		}
-
+		
 		// temp test values 
-		try (InputStream tempInput = new FileInputStream(new File(getClass().getResource("/temperature_testdata.csv").toURI()))) {
+		try (InputStream tempInput = getClass().getResourceAsStream("/temperature_testdata.csv")) {
 			String[] tempFileContents = PApplet.loadStrings(tempInput); 
 			String[] tempTestDataStrings = tempFileContents[0].split(",");
 			IntList tempTestData = new IntList();
@@ -235,7 +243,7 @@ public class TestDataStreamer {
 		}
 
 		// hr and spo2 test values
-		try (InputStream hrInput = new FileInputStream(new File(getClass().getResource("/HR_SPO2_testdata.csv").toURI()))) {
+		try (InputStream hrInput = getClass().getResourceAsStream("/HR_SPO2_testdata.csv")) {
 			Table hrspo2TestTable = new Table(hrInput, "csv, header");
 			hrTestData = new IntList();
 			spo2TestData = new IntList();

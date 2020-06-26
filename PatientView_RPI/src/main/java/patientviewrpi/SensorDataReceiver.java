@@ -63,7 +63,7 @@ public class SensorDataReceiver {
 	 */
 	ArrayList<UartPacket> processSensorData() {
 	  ArrayList<UartPacket> newData = new ArrayList<>();
-	  byte[] dataPacket = new byte[10000];
+	  byte[] dataPacket = new byte[1000];
 	  while (arduinoPort.available() >= serialPacketLength && (arduinoPort.readBytesUntil(delimiter, dataPacket) == serialPacketLength)) {
 	    UartPacket dataPoints = decodeData(dataPacket);
 	    newData.add(dataPoints);
@@ -93,8 +93,8 @@ public class SensorDataReceiver {
 
 		int red = ((int)dataPacket[1] << 8) | ((int)dataPacket[2] & 0xFF);
 		int ir = (((int)dataPacket[3] & 0xFF) << 8) | ((int)dataPacket[4] & 0xFF);
-		int hr = dataPacket[5];
-		int spo2 = dataPacket[6];
+		int hr = (int)dataPacket[5] & 0xFF;
+		int spo2 = (int)dataPacket[6] & 0xFF;
 		int temp = (((int)dataPacket[7] & 0xFF) << 8) | ((int)dataPacket[8] & 0xFF);
 
 		decodedPacket.red = red;
